@@ -36,9 +36,9 @@ export async function POST(req: Request) {
       boxes,
       payment = "COD",
       totalAmount = 0,
-      paidAmount = 0,
-      discount = 0,
       notes = "",
+      razorpayPaymentId = "",
+      razorpayOrderId = "",
     } = body;
 
     if (!name || !phone || !address || !product || !size) {
@@ -50,8 +50,6 @@ export async function POST(req: Request) {
 
     const parsedBoxes = Number(boxes);
     const parsedTotal = Number(totalAmount);
-    const parsedPaid = Number(paidAmount);
-    const parsedDiscount = Number(discount);
 
     if (!parsedBoxes || parsedBoxes < 1) {
       return NextResponse.json(
@@ -60,6 +58,7 @@ export async function POST(req: Request) {
       );
     }
 
+    const isOnlinePaid = payment === "Online" && !!razorpayPaymentId;
     const generatedOrderId = generateOrderId();
 
     const order = await Order.create({
@@ -78,17 +77,20 @@ export async function POST(req: Request) {
       boxes: parsedBoxes,
       payment,
       totalAmount: parsedTotal,
-      paidAmount: parsedPaid,
-      discount: parsedDiscount,
+      paidAmount: isOnlinePaid ? parsedTotal : 0,
+      discount: 0,
       notes,
-      approvalStatus: "Pending",
-      status: "Pending Approval",
+      razorpayPaymentId,
+      razorpayOrderId,
+      // All orders confirmed instantly — no approval needed
+      status: "Confirmed",
+      paymentStatus: isOnlinePaid ? "Paid" : "Pending",
     });
 
     return NextResponse.json(
       {
         success: true,
-        message: "Order created successfully",
+        message: "Order confirmed successfully",
         orderId: generatedOrderId,
         order,
       },
@@ -96,7 +98,6 @@ export async function POST(req: Request) {
     );
   } catch (error: any) {
     console.error("POST ORDER ERROR:", error);
-
     return NextResponse.json(
       { error: error.message || "Server error" },
       { status: 500 }
